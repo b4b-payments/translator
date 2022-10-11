@@ -51,7 +51,7 @@ namespace :translator do
   desc 'fetches the translations from gengo'
   task fetch_from_gengo: :environment do
     Translator::Translator.read_orders.each do |order|
-      Translator::Translator.instance(order).fetch_from_gengo order[:id]
+      Translator::Translator.instance(**order).fetch_from_gengo order[:id]
     end
   end
 
