@@ -1,5 +1,6 @@
 require 'yaml'
 require 'gengo'
+require 'open3'
 require 'translator/railtie'
 
 module Translator
@@ -12,7 +13,7 @@ module Translator
       @from = options[:from]
       @to = options[:to]
       @comments = options[:comments]
-      @directory = options[:directory] || Translator.default_dir
+      @directory = options[:directory] || Translator.directory
     end
 
     def prepare_translations_for_missing_keys
@@ -27,6 +28,8 @@ module Translator
     end
 
     def submit_to_gengo(dry_run: true)
+      return translate_from_british_or_from_american if !dry_run && (from == :en && to == :en_us || from == :en_us && to == :en)
+
       jobs = gengo_jobs
 
       if jobs.empty?
@@ -38,7 +41,7 @@ module Translator
 
       unless dry_run
         response = gengo.postTranslationJobs jobs: jobs
-        self.class.write_orders(new_orders: [{ id: response['response']['order_id'].to_i, to: to, from: from, prefix: Translator.prefix }])
+        self.class.write_orders(new_orders: [{ id: response['response']['order_id'].to_i, to: to, from: from, prefix: Translator.prefix, directory: directory }])
       end
     end
 
@@ -104,8 +107,8 @@ module Translator
             body_src: content,
             force: 0,
             comment: comments,
-            lc_src: from,
-            lc_tgt: to,
+            lc_src: from == 'en_us' ? 'en' : from,
+            lc_tgt: to == 'en_us' ? 'en' : to,
             tier: 'standard',
             custom_data: key,
             type: 'text',
@@ -162,7 +165,25 @@ module Translator
       (keys_1 - keys_2).map {|k| "#{to}.#{k}" }
     end
 
+    def translate_from_british_or_from_american
+      I18n.with_locale(from) do
+        @import = find_missing_keys.each_with_object({}) do |key, hash|
+          hash[key] = translate_with_misspell content: I18n.t(key.sub("#{to}.", '')).to_s
+        end
+        write_locale_file
+      end
+    end
+
+    def translate_with_misspell content:
+      target_locale = to == :en_us ? 'US' : 'UK'
+      stdout_str, _stderr_str, status = Open3.capture3('misspell -w -q -locale ' + target_locale, stdin_data: content)
+      raise 'make sure that you can run the following command: echo "colorful" | misspell -w -q -locale UK' if status != 0
+      stdout_str
+    end
+
     class << self
+
+      attr_accessor :default_dir
 
       def translators
         result = []
@@ -178,12 +199,12 @@ module Translator
         result
       end
 
-      def default_dir
-        Translator.dir || 'config/locales/multilingual'
+      def directory
+        Translator.dir || Translator.default_dir
       end
 
-      def available_locales dir = default_dir
-        Dir.glob(Rails.root.join("#{dir}/??.yml")).map{|file| File.basename(file, '.yml') }
+      def available_locales dir = directory
+        Dir.glob(Rails.root.join("#{dir}/*.yml")).map{|file| File.basename(file, '.yml') }
       end
 
       def translation_file
@@ -212,7 +233,8 @@ module Translator
 
       def instance **params
         new from: (params[:from] || from).to_sym,
-          to: (params[:to] || to).to_sym
+          to: (params[:to] || to).to_sym,
+          directory: params[:directory]
       end
 
       def read_orders
@@ -313,4 +335,5 @@ module Translator
 
   end
 
+  Translator.default_dir = 'lib/pcs_core/config/locales/cardholder'
 end
