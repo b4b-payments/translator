@@ -1,6 +1,9 @@
 require 'yaml'
+require 'json'
 require 'gengo'
 require 'open3'
+require "active_support"
+require "active_support/core_ext"
 require 'translator/railtie'
 
 module Translator
@@ -17,14 +20,15 @@ module Translator
     end
 
     def prepare_translations_for_missing_keys
-      I18n.with_locale(from) do
-        result =
-          find_missing_keys.each_with_object({}) do |key, hash|
-            hash[key] = I18n.t(key.sub("#{to}.", '')).to_s
+      result =
+        begin
+          origin_translations, missing_keys = find_missing_keys
+          missing_keys.each_with_object({}) do |key, hash|
+            hash[key] = get_translation(origin_translations, Translator.format == 'json' ? key : "#{from}.#{key}")
           end
+        end
 
-        wrap_interpolation_keys(result)
-      end
+      wrap_interpolation_keys(result)
     end
 
     def submit_to_gengo(dry_run: true)
@@ -36,7 +40,7 @@ module Translator
         puts "Nothing to translate from #{from} to #{to}"
         return
       else
-        puts "Submitting: #{jobs.keys.join(', ')}"
+        puts "Submitting for #{to}: #{jobs.keys.join(', ')}"
       end
 
       unless dry_run
@@ -105,10 +109,10 @@ module Translator
           key,
           {
             body_src: content,
-            force: 0,
+            force: 1,
             comment: comments,
-            lc_src: from == 'en_us' ? 'en' : from,
-            lc_tgt: to == 'en_us' ? 'en' : to,
+            lc_src: from.to_s == 'en_us' ? 'en' : from,
+            lc_tgt: to.to_s == 'en_us' ? 'en' : to,
             tier: 'standard',
             custom_data: key,
             type: 'text',
@@ -149,29 +153,34 @@ module Translator
     end
 
     def write_locale_file
-      old_yaml    = yaml(path(to))
-      new_yaml    = @import ? deflatten_keys(@import) : {}
-      merged_yaml = old_yaml ? old_yaml.deep_merge(new_yaml) : new_yaml
+      old_translations = read_translation_file(path(to))
+      new_translations = @import ? deflatten_keys(@import) : {}
+      new_translations = { to.to_s => new_translations } if Translator.format == 'yml'
+      merged_translations = old_translations ? old_translations.deep_merge(new_translations) : new_translations
       File.open(path(to), 'w') do |file|
-        file.write deep_sort_hash(merged_yaml).to_yaml
+        if Translator.format == 'json'
+          file.write JSON.pretty_generate(deep_sort_hash(merged_translations))
+        else
+          file.write deep_sort_hash(merged_translations).to_yaml
+        end
       end
     end
 
     def find_missing_keys origin_file: nil, target_file: nil
-      yaml_1 = yaml(origin_file || path(from))
-      yaml_2 = yaml(target_file || path(to))
-      keys_1 = yaml_1.present? ? flatten_keys(yaml_1[yaml_1.keys.first] || {}) : []
-      keys_2 = yaml_2.present? ? flatten_keys(yaml_2[yaml_2.keys.first] || {}) : []
-      (keys_1 - keys_2).map {|k| "#{to}.#{k}" }
+      translations_1 = read_translation_file(origin_file || path(from))
+      translations_2 = read_translation_file(target_file || path(to))
+      keys_1 = translations_1.present? ? flatten_keys(Translator.format == 'json' ? translations_1 : translations_1[translations_1.keys.first] || {}) : []
+      keys_2 = translations_2.present? ? flatten_keys(Translator.format == 'json' ? translations_2 : translations_2[translations_2.keys.first] || {}) : []
+      return translations_1, (keys_1 - keys_2)
     end
 
     def translate_from_british_or_from_american
-      I18n.with_locale(from) do
-        @import = find_missing_keys.each_with_object({}) do |key, hash|
-          hash[key] = translate_with_misspell content: I18n.t(key.sub("#{to}.", '')).to_s
-        end
-        write_locale_file
+      origin_translations, missing_keys = find_missing_keys
+      @import = missing_keys.each_with_object({}) do |key, hash|
+        content = get_translation(origin_translations, Translator.format == 'json' ? key : "#{from}.#{key}")
+        hash[key] = translate_with_misspell content: content
       end
+      write_locale_file
     end
 
     def translate_with_misspell content:
@@ -204,11 +213,15 @@ module Translator
       end
 
       def available_locales dir = directory
-        Dir.glob(Rails.root.join("#{dir}/*.yml")).map{|file| File.basename(file, '.yml') }
+        Dir.glob(Rails.root.join("#{dir}/*.#{Translator.format}")).map{|file| File.basename(file, ".#{Translator.format}") }
       end
 
       def translation_file
         Rails.root.join '.in_progress_translations'
+      end
+
+      def format
+        ENV['FORMAT'] || 'yml'
       end
 
       %w(FROM TO FILE DIR PREFIX).each do |param|
@@ -271,12 +284,12 @@ module Translator
       write_locale_file
     end
 
-    def yaml file_path
-      YAML.load((File.open(file_path)))
+    def read_translation_file file_path
+      file_path.end_with?('json') ? JSON.load_file(file_path) : YAML.load_file(file_path)
     end
 
     def path(locale)
-      File.expand_path(File.join(directory, [Translator.prefix, locale, 'yml'].compact.join('.')))
+      File.expand_path(File.join(directory, [Translator.prefix, locale, Translator.format].compact.join('.')))
     end
 
     def deflatten_keys(hash)
@@ -300,6 +313,13 @@ module Translator
         end
       end
       prefix == "" ? keys.flatten : keys
+    end
+
+    def get_translation hash, key
+      result = key.split('.').reduce(hash) do |h, slice|
+        h[slice]
+      end
+      result
     end
 
     def wrap_interpolation_keys(hash)

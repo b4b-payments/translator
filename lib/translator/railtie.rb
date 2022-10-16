@@ -1,3 +1,5 @@
+require 'rails'
+
 module Translator
   class Railtie < Rails::Railtie
     rake_tasks do
