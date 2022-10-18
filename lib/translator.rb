@@ -35,18 +35,21 @@ module Translator
       return translate_from_british_or_from_american if !dry_run && (from == :en && to == :en_us || from == :en_us && to == :en)
 
       jobs = gengo_jobs
+      word_count = jobs.keys.count
 
       if jobs.empty?
         puts "Nothing to translate from #{from} to #{to}"
-        return
+        return 0
       else
-        puts "Submitting for #{to}: #{jobs.keys.join(', ')}"
+        puts "Submitting #{word_count} words for #{to}: #{jobs.keys.join(', ')}"
       end
 
       unless dry_run
         response = gengo.postTranslationJobs jobs: jobs
         self.class.write_orders(new_orders: [{ id: response['response']['order_id'].to_i, to: to, from: from, prefix: Translator.prefix, directory: directory }])
       end
+
+      word_count
     end
 
     def fetch_order(order_id)
