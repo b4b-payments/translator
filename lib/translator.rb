@@ -34,13 +34,13 @@ module Translator
     def submit_to_gengo(dry_run: true)
       return translate_from_british_or_from_american if !dry_run && (from == :en && to == :en_us || from == :en_us && to == :en)
 
-      jobs = gengo_jobs
+      word_count, jobs = gengo_jobs
 
       if jobs.empty?
         puts "Nothing to translate from #{from} to #{to}"
         return
       else
-        puts "Submitting for #{to}: #{jobs.keys.join(', ')}"
+        puts "Submitting for #{to} (estimated number of words: #{word_count}): #{jobs.keys.join(', ')}"
       end
 
       unless dry_run
@@ -93,8 +93,9 @@ module Translator
 
     def gengo_jobs
       position_index = 0
+      word_count = 0
 
-      prepare_translations_for_missing_keys.map do |key, content|
+      result = prepare_translations_for_missing_keys.map do |key, content|
         next if content.blank?
 
         slug =
@@ -105,6 +106,7 @@ module Translator
           end
 
 
+        word_count += content.split(' ').size
         [
           key,
           {
@@ -122,6 +124,7 @@ module Translator
           }
         ]
       end.compact.to_h
+      return word_count, result
     end
 
     def export_keys
