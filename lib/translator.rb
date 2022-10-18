@@ -198,6 +198,7 @@ module Translator
     class << self
 
       attr_accessor :default_dir
+      attr_writer :translation_file
 
       def translators
         result = []
@@ -222,7 +223,7 @@ module Translator
       end
 
       def translation_file
-        Rails.root.join 'lib', 'pcs_core', '.in_progress_translations'
+        @translation_file || Rails.root.join('lib', 'pcs_core', '.in_progress_translations')
       end
 
       def format
