@@ -38,7 +38,7 @@ module Translator
 
       if jobs.empty?
         puts "Nothing to translate from #{from} to #{to}"
-        return
+        return 0
       else
         puts "Submitting for #{to} (estimated number of words: #{word_count}): #{jobs.keys.join(', ')}"
       end
@@ -47,6 +47,8 @@ module Translator
         response = gengo.postTranslationJobs jobs: jobs
         self.class.write_orders(new_orders: [{ id: response['response']['order_id'].to_i, to: to, from: from, prefix: Translator.prefix, directory: directory }])
       end
+
+      word_count
     end
 
     def fetch_order(order_id)

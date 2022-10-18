@@ -39,13 +39,14 @@ namespace :translator do
   desc 'submits the translations to gengo'
   task submit_to_gengo: :environment do
     dry_run = ENV['EXECUTE'] != '1'
+    word_count = 0
 
     Translator::Translator.translators.each do |translator|
-      translator.submit_to_gengo(dry_run: dry_run)
+      word_count += translator.submit_to_gengo(dry_run: dry_run)
     end
 
     puts ''
-    puts "This is a dry-run, no Gengo jobs have been submitted! Specify EXECUTE=1 to force submission." if dry_run
+    puts "This is a dry-run, no Gengo jobs for #{word_count} words have been submitted! Specify EXECUTE=1 to force submission." if dry_run
   end
 
   desc 'fetches the translations from gengo'
