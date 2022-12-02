@@ -32,7 +32,7 @@ module Translator
     end
 
     def submit_to_gengo(dry_run: true)
-      return translate_from_british_or_from_american if !dry_run && (from == :en && to == :en_us || from == :en_us && to == :en)
+      return translate_from_british_or_from_american if !dry_run && (from.to_s == 'en' && to.to_s == 'en_us' || from.to_s == 'en_us' && to.to_s == 'en')
 
       word_count, jobs = gengo_jobs
 
@@ -189,7 +189,7 @@ module Translator
     end
 
     def translate_with_misspell content:
-      target_locale = to == :en_us ? 'US' : 'UK'
+      target_locale = to.to_s == 'en_us' ? 'US' : 'UK'
       stdout_str, _stderr_str, status = Open3.capture3('misspell -w -q -locale ' + target_locale, stdin_data: content)
       raise 'make sure that you can run the following command: echo "colorful" | misspell -w -q -locale UK' if status != 0
       stdout_str
@@ -251,8 +251,8 @@ module Translator
       end
 
       def instance **params
-        new from: (params[:from] || from).to_sym,
-          to: (params[:to] || to).to_sym,
+        new from: (params[:from] || from).to_s,
+          to: (params[:to] || to).to_s,
           directory: params[:directory]
       end
 
