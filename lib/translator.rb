@@ -274,7 +274,7 @@ module Translator
         new_order_list.concat(new_orders)
 
         if new_order_list.empty?
-          File.unlink translation_file if File.exists? translation_file
+          File.unlink translation_file if File.exist? translation_file
         else
           File.open translation_file, 'w+' do |file_handler|
             file_handler.write new_order_list.to_json
