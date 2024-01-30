@@ -223,7 +223,7 @@ module Translator
       end
 
       def translation_file
-        @translation_file || Rails.root.join('lib', 'pcs_core', '.in_progress_translations')
+        @translation_file || Rails.root.join('.in_progress_translations')
       end
 
       def format
