@@ -361,5 +361,5 @@ module Translator
 
   end
 
-  Translator.default_dir = Rails.root.join('lib/pcs_core/config/locales/cardholder')
+  Translator.default_dir = Rails.root.join('config/locales/cardholder')
 end
