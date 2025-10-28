@@ -291,7 +291,7 @@ module Translator
     end
 
     def read_translation_file file_path
-      file_path.end_with?('json') ? JSON.load_file(file_path) : YAML.load_file(file_path)
+      file_path.end_with?('json') ? JSON.load_file(file_path) : YAML.load_file(file_path, aliases: true)
     end
 
     def path(locale)
